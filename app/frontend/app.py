@@ -305,94 +305,119 @@ def get_recommendations(user_id: str, model: str, top_k: int = 10):
         
         elif rec_button and not rec_user_id:
             st.warning("⚠️ 请输入目标用户 ID")
-    
-    # ========== Tab 2: 搜索测试 ==========
+
+    # ========== Tab 2: 搜索测试 (修改后) ==========
     with tab2:
-        st.subheader("🔍 搜索测试 (Search Tester)")
-        st.markdown("测试商品搜索功能和分词效果")
+        st.subheader("🔍 搜索效果对比 (Search Comparison)")
+        st.markdown("对比 **传统关键词匹配** 与 **智能分词搜索** 的结果差异")
         
-        col1, col2 = st.columns([4, 1])
+        col_input, col_btn = st.columns([4, 1])
         
-        with col1:
+        with col_input:
             search_query = st.text_input(
-                "搜索关键词",
+                "输入搜索关键词 (尝试输入模糊词，如 '打印耗材')",
                 placeholder="例如: 3D打印机",
                 key="search_query"
             )
         
-        with col2:
-            st.write("")  # 占位
-            st.write("")  # 占位
-            search_button = st.button("搜索", type="primary", use_container_width=True)
+        with col_btn:
+            st.write("") 
+            st.write("") 
+            search_button = st.button("开始比对", type="primary", use_container_width=True)
         
         if search_button and search_query:
             st.markdown("---")
-            st.info("🚧 **功能开发中**: 当前展示 Mock 数据，实际搜索接口尚未实现")
             
-            # TODO: 未来此处应调用实际的搜索接口
-            # Example: search_data = fetch_data("/search", 
-            #                                    params={"q": search_query, "limit": 20})
+            # 创建左右对比布局
+            col_basic, col_smart = st.columns(2)
             
-            st.success(f"🔎 搜索关键词: `{search_query}`")
-            
-            # Mock 分词结果
-            col1, col2 = st.columns([1, 2])
-            
-            with col1:
-                st.markdown("### 📝 分词结果")
-                mock_tokens = ["3D", "打印机", "Pro", "高精度"]
-                for token in mock_tokens:
-                    st.markdown(f"- `{token}`")
-            
-            with col2:
-                st.markdown("### 📊 搜索统计")
-                st.metric("匹配商品数", 42)
-                st.metric("搜索耗时", "0.15s")
-                st.metric("相关度阈值", "0.60")
-            
+            # --- 左侧：一般搜索 (Mock) ---
+            with col_basic:
+                st.info("🔡 **方案 A: 一般搜索 (LIKE '%kw%')**")
+                st.caption("逻辑: 仅匹配完全包含输入字符串的商品标题。")
+                
+                # Mock 逻辑：如果不包含明确的词，模拟找不到
+                mock_basic_results = []
+                if "3D" in search_query or "打印" in search_query:
+                    mock_basic_results = [
+                        {"id": "101", "title": "3D打印机 Pro", "match": "完全匹配"},
+                        {"id": "102", "title": "家用3D打印机", "match": "完全匹配"},
+                    ]
+                
+                if mock_basic_results:
+                    st.dataframe(
+                        pd.DataFrame(mock_basic_results), 
+                        use_container_width=True, 
+                        hide_index=True
+                    )
+                else:
+                    st.warning("🚫 无匹配结果 (关键词未完全命中)")
+
+            # --- 右侧：分词搜索 (Mock) ---
+            with col_smart:
+                st.success("🧠 **方案 B: 分词/语义搜索 (Tokenizer)**")
+                st.caption("逻辑: 对输入进行分词、去除停用词、同义词扩展，计算相关度。")
+                
+                # Mock 分词展示
+                st.markdown("##### 🛠️ 分词解析:")
+                # 简单的模拟分词
+                tokens = search_query.replace(" ", "").replace("3D", "3D ").split()
+                if not tokens: tokens = [search_query]
+                
+                # 展示 Tags
+                token_html = "".join([f'<span style="background-color: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 12px; margin-right: 5px; font-size: 0.9em;">{t}</span>' for t in tokens])
+                st.markdown(token_html, unsafe_allow_html=True)
+                
+                st.write("") # Spacer
+
+                # Mock 智能结果 (总是有更多结果)
+                mock_smart_results = [
+                    {"title": "3D打印机 Pro Max", "score": 0.98, "reason": "核心词命中"},
+                    {"title": "各种打印耗材套餐", "score": 0.85, "reason": "同义词扩展"},
+                    {"title": "高精度树脂(适配打印)", "score": 0.72, "reason": "语义相关"},
+                    {"title": "模型后期处理工具", "score": 0.60, "reason": "关联推荐"},
+                ]
+                
+                df_smart = pd.DataFrame(mock_smart_results)
+                st.dataframe(
+                    df_smart,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "score": st.column_config.ProgressColumn(
+                            "相关度", format="%.2f", min_value=0, max_value=1
+                        )
+                    }
+                )
+
             st.markdown("---")
-            st.markdown("### 🎯 搜索结果")
+            st.markdown("#### 📝 对比总结")
+            st.markdown(f"""
+            - **一般搜索**: 仅找到了 **{len(mock_basic_results)}** 个严格匹配的商品，容易受错别字或用户表达习惯影响。
+            - **分词搜索**: 识别出了 `{tokens}` 等特征，召回了 **{len(mock_smart_results)}** 个潜在相关商品，包括同义词和相关品类。
+            """)
             
-            # Mock 搜索结果
-            mock_search_results = [
-                {"item_id": "item_101", "title": "3D打印机 Pro Max", 
-                 "category": "打印设备", "score": 0.95},
-                {"item_id": "item_102", "title": "高精度3D打印机", 
-                 "category": "打印设备", "score": 0.88},
-                {"item_id": "item_103", "title": "桌面级3D打印机", 
-                 "category": "打印设备", "score": 0.82},
-                {"item_id": "item_104", "title": "工业3D打印机配件", 
-                 "category": "配件耗材", "score": 0.75},
-                {"item_id": "item_105", "title": "3D打印材料套装", 
-                 "category": "配件耗材", "score": 0.68},
-            ]
-            
-            df_search = pd.DataFrame(mock_search_results)
-            df_search.index = df_search.index + 1  # 从 1 开始编号
-            st.dataframe(
-                df_search,
-                use_container_width=True,
-                column_config={
-                    "item_id": st.column_config.TextColumn("商品 ID", width="small"),
-                    "title": st.column_config.TextColumn("商品名称", width="large"),
-                    "category": st.column_config.TextColumn("分类", width="small"),
-                    "score": st.column_config.ProgressColumn(
-                        "相关度分数",
-                        format="%.2f",
-                        min_value=0,
-                        max_value=1,
-                    ),
-                }
-            )
-            
-            st.markdown("---")
-            st.code("""
-# TODO: 实际实现代码示例
-def search_items(query: str, limit: int = 20):
-    endpoint = "/search"
-    params = {"q": query, "limit": limit}
-    return fetch_data(endpoint, params)
-            """, language="python")
+            # 代码预览区
+            with st.expander("查看后端实现逻辑差异 (伪代码)"):
+                col_code1, col_code2 = st.columns(2)
+                with col_code1:
+                    st.code("""
+# 一般搜索
+sql = "SELECT * FROM items WHERE title LIKE :q"
+db.execute(sql, {"q": f"%{query}%"})
+                    """, language="python")
+                with col_code2:
+                    st.code("""
+# 分词搜索
+tokens = tokenizer.cut(query)
+# ElasticSearch / Vector Search
+query = {
+    "bool": {
+        "should": [{"match": {"title": t}} for t in tokens]
+    }
+}
+es.search(index="items", body=query)
+                    """, language="python")
         
         elif search_button and not search_query:
             st.warning("⚠️ 请输入搜索关键词")
