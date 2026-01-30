@@ -29,8 +29,21 @@ class UserInfo(Base):
         comment="更新时间"
     )
 
-    def __repr__(self):
-        return f"<UserInfo(uid={self.uid}, country={self.country})>"
+
+# class UserBehavior(Base):
+#     """用户行为表模型"""
+    
+#     __tablename__ = "user_behavior"
+    
+#     id = Column(Integer, primary_key=True, autoincrement=True, comment="自增ID")
+#     user_id = Column(String(100), nullable=False, index=True, comment="用户ID")
+#     item_id = Column(String(100), nullable=False, index=True, comment="商品ID")
+#     action_type = Column(String(20), nullable=False, comment="行为类型: view/click/cart/purchase/favorite")
+#     timestamp = Column(DateTime, nullable=False, server_default=func.current_timestamp(), comment="行为时间")
+#     created_at = Column(TIMESTAMP, server_default=func.current_timestamp(), comment="创建时间")
+
+#     def __repr__(self):
+#         return f"<UserInfo(uid={self.uid}, country={self.country})>"
 
 
 class UserBehavior(Base):

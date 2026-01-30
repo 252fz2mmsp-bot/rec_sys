@@ -3,7 +3,7 @@
 API 路由汇总
 """
 from fastapi import APIRouter
-from app.api.endpoints import users, items
+from app.api.endpoints import users, items, recommend
 
 # 创建 API 路由器
 api_router = APIRouter()
@@ -19,4 +19,10 @@ api_router.include_router(
     items.router,
     prefix="/items",
     tags=["Items"]
+)
+
+api_router.include_router(
+    recommend.router,
+    prefix="/recommend",
+    tags=["Recommendations"]
 )
