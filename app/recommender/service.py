@@ -182,27 +182,51 @@ class RecommenderService:
             **kwargs: 其他参数
             
         Returns:
-            推荐结果列表，每个元素包含 item_id 和 score
+            推荐结果列表，每个元素包含 item_id 和 score（真实的算法分数）
         """
-        recommendations = self.recommend(
-            user_id=user_id,
-            algorithm=algorithm,
-            k=k,
-            filter_interacted=filter_interacted,
-            **kwargs
-        )
-        
-        # 为推荐结果添加分数（简化处理：使用排名倒数作为分数）
-        results = []
-        for idx, item_id in enumerate(recommendations):
-            score = 1.0 - (idx / max(len(recommendations), 1))  # 归一化到 [0, 1]
-            results.append({
-                "item_id": item_id,
-                "score": round(score, 4),
-                "rank": idx + 1
-            })
-        
-        return results
+        try:
+            recommender = self.get_recommender(algorithm, **kwargs)
+            
+            # 调用算法的 recommend_with_scores 方法获取真实分数
+            recommendations_with_scores = recommender.recommend_with_scores(
+                user_id=user_id,
+                k=k,
+                filter_interacted=filter_interacted,
+                **kwargs
+            )
+            
+            # 构建返回结果
+            results = []
+            for idx, (item_id, score) in enumerate(recommendations_with_scores):
+                results.append({
+                    "item_id": item_id,
+                    "score": round(float(score), 4),
+                    "rank": idx + 1
+                })
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error generating recommendations with scores: {e}")
+            # 降级策略：使用默认分数
+            recommendations = self.recommend(
+                user_id=user_id,
+                algorithm=algorithm,
+                k=k,
+                filter_interacted=filter_interacted,
+                **kwargs
+            )
+            
+            results = []
+            for idx, item_id in enumerate(recommendations):
+                score = 1.0 - (idx / max(len(recommendations), 1))
+                results.append({
+                    "item_id": item_id,
+                    "score": round(score, 4),
+                    "rank": idx + 1
+                })
+            
+            return results
     
     def batch_recommend(
         self,

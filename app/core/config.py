@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     
     # 数据库配置
-    DATABASE_URL: str = "mysql+pymysql://root:password@localhost:3306/rec_sys_db"
+    # DATABASE_URL: str = "mysql+pymysql://root:password@localhost:3306/rec_sys_db"
+    DATABASE_URL: str = "mysql+pymysql://root:123456@172.17.144.1:3306/rec_sys"  # wsl 连接宿主机数据库
     
     # API 配置
     API_V1_PREFIX: str = "/api/v1"

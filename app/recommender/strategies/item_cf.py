@@ -48,7 +48,7 @@ class ItemCFRecommender(BaseRecommender):
         self.data_loader = DataLoader(db)
         
         # 配置参数
-        self.cache_path = kwargs.get("cache_path", "app/recommender/cache/itemcf_similarity.pkl")
+        self.cache_path = kwargs.get("cache_path", "../app/recommender/cache/itemcf_similarity.pkl")
         self.similarity_method = kwargs.get("similarity_method", "cosine")
         self.min_similarity = kwargs.get("min_similarity", 0.1)
         self.top_n_similar = kwargs.get("top_n_similar", 50)
@@ -188,7 +188,7 @@ class ItemCFRecommender(BaseRecommender):
             similar_items = self.similarity_matrix[item_id]
             
             for similar_item_id, similarity_score in similar_items:
-                # 聚合分数（可以使用加权求和）
+                # 聚合分数（使用相似度求和）
                 candidate_scores[similar_item_id] += similarity_score
         
         # 3. 过滤已交互商品
@@ -209,6 +209,67 @@ class ItemCFRecommender(BaseRecommender):
         
         logger.info(f"Generated {len(recommendations)} recommendations for user {user_id}")
         return recommendations
+    
+    def recommend_with_scores(
+        self, 
+        user_id: str, 
+        k: int = 10,
+        filter_interacted: bool = True,
+        **kwargs
+    ) -> List[tuple]:
+        """
+        生成带真实分数的协同过滤推荐列表
+        
+        Args:
+            user_id: 目标用户ID
+            k: 推荐商品数量
+            filter_interacted: 是否过滤用户已交互的商品
+            **kwargs: 其他参数
+            
+        Returns:
+            推荐结果列表，每个元素为 (item_id, score) 元组，score 为真实的相似度聚合分数
+        """
+        if not self.is_fitted() or self.similarity_matrix is None:
+            logger.warning("Model not fitted, using default scores")
+            return super().recommend_with_scores(user_id, k, filter_interacted, **kwargs)
+        
+        # 1. 获取用户历史交互商品
+        interacted_items = self.data_loader.get_user_interacted_items(user_id)
+        
+        if not interacted_items:
+            logger.info(f"User {user_id} has no interaction history")
+            return super().recommend_with_scores(user_id, k, filter_interacted, **kwargs)
+        
+        # 2. 基于用户历史商品，找到相似商品并聚合分数
+        candidate_scores = defaultdict(float)
+        
+        for item_id in interacted_items:
+            if item_id not in self.similarity_matrix:
+                continue
+            
+            # 获取该商品的相似商品列表
+            similar_items = self.similarity_matrix[item_id]
+            
+            for similar_item_id, similarity_score in similar_items:
+                # 聚合分数（使用相似度求和）
+                candidate_scores[similar_item_id] += similarity_score
+        
+        # 3. 过滤已交互商品
+        if filter_interacted:
+            candidate_scores = {
+                item_id: score for item_id, score in candidate_scores.items()
+                if item_id not in interacted_items
+            }
+        
+        # 4. 排序并返回Top K（带真实分数）
+        sorted_candidates = sorted(
+            candidate_scores.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:k]
+        
+        logger.info(f"Generated {len(sorted_candidates)} recommendations with scores for user {user_id}")
+        return sorted_candidates
     
     def get_similar_items(self, item_id: str, k: int = 10) -> List[Tuple[str, float]]:
         """

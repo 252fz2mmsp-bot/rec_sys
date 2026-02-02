@@ -259,49 +259,84 @@ def page_algo_debugger():
         
         if rec_button and rec_user_id:
             st.markdown("---")
-            st.info("🚧 **功能开发中**: 当前展示 Mock 数据，实际推荐接口尚未实现")
             
-            # TODO: 未来此处应调用实际的推荐接口
-            # Example: recommend_data = fetch_data(f"/recommend/{rec_user_id}", 
-            #                                       params={"model": algo_model, "top_k": 10})
+            # 算法名称映射
+            algorithm_map = {
+                "Random (随机推荐)": "random",
+                "Popular (热门推荐)": "popular",
+                "ItemCF (协同过滤)": "itemcf"
+            }
+            algorithm = algorithm_map.get(algo_model, "popular")
             
-            # Mock 推荐结果
-            st.success(f"✅ 为用户 `{rec_user_id}` 生成推荐（算法: {algo_model}）")
+            # 调用真实的推荐接口
+            with st.spinner(f"正在使用 {algo_model} 生成推荐..."):
+                recommend_data = fetch_data(
+                    f"/recommend/{rec_user_id}",
+                    params={
+                        "algorithm": algorithm,
+                        "k": 10,
+                        "filter_interacted": True,
+                        "with_details": True
+                    }
+                )
             
-            mock_recommendations = [
-                {"rank": 1, "item_id": "item_001", "score": 0.95, "title": "3D打印机 Pro Max"},
-                {"rank": 2, "item_id": "item_002", "score": 0.89, "title": "建模软件会员套餐"},
-                {"rank": 3, "item_id": "item_003", "score": 0.87, "title": "高精度树脂材料"},
-                {"rank": 4, "item_id": "item_004", "score": 0.82, "title": "创意模型设计课程"},
-                {"rank": 5, "item_id": "item_005", "score": 0.78, "title": "UV固化灯"},
-            ]
+            if recommend_data and recommend_data.get("code") == 200:
+                response_data = recommend_data.get("data", {})
+                recommendations = response_data.get("recommendations", [])
+                
+                if recommendations:
+                    st.success(f"✅ 为用户 `{rec_user_id}` 生成推荐（算法: {algo_model}）")
+                    st.caption(f"生成时间: {response_data.get('generated_at', 'N/A')}")
+                    
+                    # 以卡片形式展示推荐结果
+                    for i in range(0, len(recommendations), 2):
+                        cols = st.columns(2)
+                        for j, col in enumerate(cols):
+                            if i + j < len(recommendations):
+                                rec = recommendations[i + j]
+                                
+                                # 获取商品信息
+                                item_id = rec.get("item_id", "N/A")
+                                score = rec.get("score", 0.0)
+                                rank = rec.get("rank", i + j + 1)
+                                title = rec.get("title", f"商品 {item_id}")
+                                category = rec.get("category", "未分类")
+                                
+                                with col:
+                                    with st.container():
+                                        st.markdown(f"""
+                                        <div style="border: 1px solid #ddd; padding: 15px; border-radius: 8px; 
+                                                    background-color: #f9f9f9; margin-bottom: 10px;">
+                                            <h4>🏆 #{rank} - {title}</h4>
+                                            <p><strong>商品 ID:</strong> {item_id}</p>
+                                            <p><strong>类目:</strong> {category}</p>
+                                            <p><strong>推荐分数:</strong> <span style="color: #ff6b6b; 
+                                               font-size: 1.2em; font-weight: bold;">{score:.2f}</span></p>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("---")
+                    
+                    # 显示推荐统计信息
+                    col_stat1, col_stat2, col_stat3 = st.columns(3)
+                    with col_stat1:
+                        st.metric("推荐数量", len(recommendations))
+                    with col_stat2:
+                        avg_score = sum(r.get("score", 0) for r in recommendations) / len(recommendations)
+                        st.metric("平均分数", f"{avg_score:.3f}")
+                    with col_stat3:
+                        st.metric("使用算法", algorithm)
+                    
+                else:
+                    st.warning("⚠️ 未能生成推荐结果，可能是用户数据不足或算法未训练。")
+                    if algorithm == "itemcf":
+                        st.info("💡 **提示**: ItemCF 算法需要先训练模型。请使用 POST /api/v1/recommend/train/itemcf 接口训练模型。")
             
-            # 以卡片形式展示推荐结果
-            for i in range(0, len(mock_recommendations), 2):
-                cols = st.columns(2)
-                for j, col in enumerate(cols):
-                    if i + j < len(mock_recommendations):
-                        rec = mock_recommendations[i + j]
-                        with col:
-                            with st.container():
-                                st.markdown(f"""
-                                <div style="border: 1px solid #ddd; padding: 15px; border-radius: 8px; 
-                                            background-color: #f9f9f9; margin-bottom: 10px;">
-                                    <h4>🏆 #{rec['rank']} - {rec['title']}</h4>
-                                    <p><strong>商品 ID:</strong> {rec['item_id']}</p>
-                                    <p><strong>推荐分数:</strong> <span style="color: #ff6b6b; 
-                                       font-size: 1.2em; font-weight: bold;">{rec['score']:.2f}</span></p>
-                                </div>
-                                """, unsafe_allow_html=True)
+            elif recommend_data and recommend_data.get("code") != 200:
+                st.error(f"❌ 推荐失败: {recommend_data.get('message', '未知错误')}")
             
-            st.markdown("---")
-            st.code("""
-# TODO: 实际实现代码示例
-def get_recommendations(user_id: str, model: str, top_k: int = 10):
-    endpoint = f"/recommend/{user_id}"
-    params = {"model": model, "top_k": top_k}
-    return fetch_data(endpoint, params)
-            """, language="python")
+            else:
+                st.error("❌ 无法连接到推荐服务，请检查后端服务状态。")
         
         elif rec_button and not rec_user_id:
             st.warning("⚠️ 请输入目标用户 ID")

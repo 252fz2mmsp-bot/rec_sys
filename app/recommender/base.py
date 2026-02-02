@@ -49,6 +49,34 @@ class BaseRecommender(ABC):
         """
         pass
     
+    def recommend_with_scores(
+        self, 
+        user_id: str, 
+        k: int = 10,
+        filter_interacted: bool = True,
+        **kwargs
+    ) -> List[tuple]:
+        """
+        为指定用户生成带分数的推荐列表
+        
+        Args:
+            user_id: 目标用户ID
+            k: 返回推荐结果的数量
+            filter_interacted: 是否过滤用户已交互的商品
+            **kwargs: 其他算法特定参数
+            
+        Returns:
+            推荐结果列表，每个元素为 (item_id, score) 元组
+            默认实现：使用排名倒数作为分数
+        """
+        recommendations = self.recommend(user_id, k, filter_interacted, **kwargs)
+        # 默认使用归一化排名作为分数
+        results = []
+        for idx, item_id in enumerate(recommendations):
+            score = 1.0 - (idx / max(len(recommendations), 1))
+            results.append((item_id, score))
+        return results
+    
     def fit(self, **kwargs) -> None:
         """
         训练/预计算模型（可选实现）

@@ -63,7 +63,7 @@ def get_recommendations(
     algorithm: str = Query("popular", description="推荐算法: random/popular/itemcf"),
     k: int = Query(10, ge=1, le=100, description="推荐数量"),
     filter_interacted: bool = Query(True, description="是否过滤已交互商品"),
-    with_details: bool = Query(False, description="是否返回商品详细信息"),
+    with_details: bool = Query(True, description="是否返回商品详细信息"),
     db: Session = Depends(get_db)
 ):
     """
