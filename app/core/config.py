@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     
     # API 配置
     API_V1_PREFIX: str = "/api/v1"
-    
+
+    # Elasticsearch 配置
+    ELASTICSEARCH_URL: str = "http://localhost:9200"
+    ELASTICSEARCH_INDEX_ITEMS: str = "items"
     class Config:
         env_file = ".env"
         case_sensitive = True

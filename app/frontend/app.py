@@ -14,7 +14,7 @@ API_BASE_URL = "http://localhost:8000/api/v1"
 # 页面配置
 st.set_page_config(
     page_title="RecSys Admin Console",
-    page_icon="🎯",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -344,14 +344,14 @@ def page_algo_debugger():
     # ========== Tab 2: 搜索测试 (修改后) ==========
     with tab2:
         st.subheader("🔍 搜索效果对比 (Search Comparison)")
-        st.markdown("对比 **传统关键词匹配** 与 **智能分词搜索** 的结果差异")
+        st.markdown("对比 **传统关键词匹配** 与 **Elasticsearch 智能分词搜索** 的结果差异")
         
         col_input, col_btn = st.columns([4, 1])
         
         with col_input:
             search_query = st.text_input(
-                "输入搜索关键词 (尝试输入模糊词，如 '打印耗材')",
-                placeholder="例如: 3D打印机",
+                "输入搜索关键词 (尝试输入模糊词，如 'printing' 或 '打印')",
+                placeholder="例如: 3D打印机 或 printer",
                 key="search_query"
             )
         
@@ -366,70 +366,139 @@ def page_algo_debugger():
             # 创建左右对比布局
             col_basic, col_smart = st.columns(2)
             
-            # --- 左侧：一般搜索 (Mock) ---
+            # --- 左侧：一般搜索 (MySQL LIKE) ---
             with col_basic:
-                st.info("🔡 **方案 A: 一般搜索 (LIKE '%kw%')**")
-                st.caption("逻辑: 仅匹配完全包含输入字符串的商品标题。")
+                st.info("🔡 **方案 A: 一般搜索 (MySQL LIKE)**")
+                st.caption("逻辑: 仅匹配完全包含输入字符串的商品标题")
                 
-                # Mock 逻辑：如果不包含明确的词，模拟找不到
-                mock_basic_results = []
-                if "3D" in search_query or "打印" in search_query:
-                    mock_basic_results = [
-                        {"id": "101", "title": "3D打印机 Pro", "match": "完全匹配"},
-                        {"id": "102", "title": "家用3D打印机", "match": "完全匹配"},
-                    ]
+                # 调用 items 接口，用 Python 过滤模拟 LIKE 搜索
+                with st.spinner("正在执行 LIKE 搜索..."):
+                    items_data = fetch_data("/items/", params={"skip": 0, "limit": 100})
                 
-                if mock_basic_results:
+                basic_results = []
+                if items_data and items_data.get("data"):
+                    all_items = items_data["data"].get("items", [])
+                    # 模拟 SQL LIKE '%keyword%' 逻辑
+                    for item in all_items:
+                        title = item.get("group_name", "")
+                        if title and search_query.lower() in title.lower():
+                            basic_results.append({
+                                "id": item.get("id", ""),
+                                "title": title[:50],  # 截断显示
+                                "match": "完全匹配"
+                            })
+                
+                if basic_results:
+                    st.success(f"找到 {len(basic_results)} 个结果")
                     st.dataframe(
-                        pd.DataFrame(mock_basic_results), 
+                        pd.DataFrame(basic_results[:5]),  # 只显示前5个
                         use_container_width=True, 
                         hide_index=True
                     )
+                    if len(basic_results) > 5:
+                        st.caption(f"还有 {len(basic_results) - 5} 个结果未显示...")
                 else:
                     st.warning("🚫 无匹配结果 (关键词未完全命中)")
 
-            # --- 右侧：分词搜索 (Mock) ---
+            # --- 右侧：分词搜索 (真实ES接口) ---
             with col_smart:
-                st.success("🧠 **方案 B: 分词/语义搜索 (Tokenizer)**")
-                st.caption("逻辑: 对输入进行分词、去除停用词、同义词扩展，计算相关度。")
+                st.success("🧠 **方案 B: Elasticsearch 分词搜索**")
+                st.caption("逻辑: 分词、词干提取、模糊匹配、相关度排序")
                 
-                # Mock 分词展示
-                st.markdown("##### 🛠️ 分词解析:")
-                # 简单的模拟分词
-                tokens = search_query.replace(" ", "").replace("3D", "3D ").split()
-                if not tokens: tokens = [search_query]
+                # 调用真实的搜索接口
+                with st.spinner("正在执行 ES 搜索..."):
+                    search_data = fetch_data(
+                        "/search/search",
+                        params={
+                            "q": search_query,
+                            "page": 1,
+                            "size": 5,
+                            "sort_by": "relevance"
+                        }
+                    )
                 
-                # 展示 Tags
-                token_html = "".join([f'<span style="background-color: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 12px; margin-right: 5px; font-size: 0.9em;">{t}</span>' for t in tokens])
-                st.markdown(token_html, unsafe_allow_html=True)
-                
-                st.write("") # Spacer
-
-                # Mock 智能结果 (总是有更多结果)
-                mock_smart_results = [
-                    {"title": "3D打印机 Pro Max", "score": 0.98, "reason": "核心词命中"},
-                    {"title": "各种打印耗材套餐", "score": 0.85, "reason": "同义词扩展"},
-                    {"title": "高精度树脂(适配打印)", "score": 0.72, "reason": "语义相关"},
-                    {"title": "模型后期处理工具", "score": 0.60, "reason": "关联推荐"},
-                ]
-                
-                df_smart = pd.DataFrame(mock_smart_results)
-                st.dataframe(
-                    df_smart,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "score": st.column_config.ProgressColumn(
-                            "相关度", format="%.2f", min_value=0, max_value=1
+                if search_data and search_data.get("success"):
+                    items = search_data.get("items", [])
+                    total = search_data.get("total", 0)
+                    
+                    if items:
+                        st.success(f"找到 {total} 个结果")
+                        
+                        # 构建结果数据
+                        smart_results = []
+                        for item in items:
+                            title = item.get("title") or item.get("group_name", "")
+                            score = item.get("score", 0)
+                            # 根据分数判断原因
+                            if score > 15:
+                                reason = "核心词命中"
+                            elif score > 10:
+                                reason = "词干匹配"
+                            elif score > 5:
+                                reason = "模糊匹配"
+                            else:
+                                reason = "语义相关"
+                            
+                            smart_results.append({
+                                "title": title[:50],
+                                "score": score / 20,  # 归一化到 0-1
+                                "reason": reason
+                            })
+                        
+                        df_smart = pd.DataFrame(smart_results)
+                        st.dataframe(
+                            df_smart,
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "score": st.column_config.ProgressColumn(
+                                    "相关度", format="%.2f", min_value=0, max_value=1
+                                )
+                            }
                         )
-                    }
-                )
+                        
+                        # 分词展示
+                        st.markdown("##### 🛠️ ES 搜索特性:")
+                        features = [
+                            "Standard Analyzer (中英文)",
+                            "English Stemming (词干)",
+                            "Fuzziness (容错)",
+                            "Multi-fields (多字段)"
+                        ]
+                        features_html = "".join([
+                            f'<span style="background-color: #dcfce7; color: #166534; '
+                            f'padding: 2px 8px; border-radius: 12px; margin-right: 5px; '
+                            f'font-size: 0.85em;">{f}</span>'
+                            for f in features
+                        ])
+                        st.markdown(features_html, unsafe_allow_html=True)
+                    else:
+                        st.warning("⚠️ 未找到相关结果")
+                else:
+                    st.error("❌ ES 搜索失败，可能未启动或未同步数据")
+                    st.caption("请确保: 1) ES已启动 2) 索引已创建 3) 数据已同步")
 
             st.markdown("---")
             st.markdown("#### 📝 对比总结")
+            
+            basic_count = len(basic_results) if 'basic_results' in locals() else 0
+            smart_count = search_data.get("total", 0) if search_data and search_data.get("success") else 0
+            
+            col_sum1, col_sum2 = st.columns(2)
+            with col_sum1:
+                st.metric("一般搜索结果数", basic_count)
+            with col_sum2:
+                st.metric("ES 搜索结果数", smart_count)
+            
             st.markdown(f"""
-            - **一般搜索**: 仅找到了 **{len(mock_basic_results)}** 个严格匹配的商品，容易受错别字或用户表达习惯影响。
-            - **分词搜索**: 识别出了 `{tokens}` 等特征，召回了 **{len(mock_smart_results)}** 个潜在相关商品，包括同义词和相关品类。
+            **关键差异：**
+            - **一般搜索**: 需要输入字符串完全命中标题，容易受拼写、大小写影响
+            - **ES 搜索**: 支持分词、词干提取（printing→print）、模糊匹配，召回率更高
+            
+            **示例测试：**
+            - 输入 `printing` → ES 可找到 "3D打印机"（通过 English Analyzer）
+            - 输入 `priting` (错字) → ES 可通过模糊匹配找到相关结果
+            - 输入 `打印` → ES 可找到包含"打印"的所有商品（中文分词）
             """)
             
             # 代码预览区
@@ -437,21 +506,33 @@ def page_algo_debugger():
                 col_code1, col_code2 = st.columns(2)
                 with col_code1:
                     st.code("""
-# 一般搜索
-sql = "SELECT * FROM items WHERE title LIKE :q"
+# 一般搜索 (MySQL)
+sql = '''
+SELECT * FROM items 
+WHERE title LIKE :q
+'''
 db.execute(sql, {"q": f"%{query}%"})
+# 缺点：必须完全匹配、无分词
                     """, language="python")
                 with col_code2:
                     st.code("""
-# 分词搜索
-tokens = tokenizer.cut(query)
-# ElasticSearch / Vector Search
+# ES 分词搜索
 query = {
     "bool": {
-        "should": [{"match": {"title": t}} for t in tokens]
+        "should": [
+            {"multi_match": {
+                "query": query,
+                "fields": ["title^3", "tags^2"],
+                "fuzziness": "AUTO"
+            }},
+            {"match_phrase": {
+                "title": {"query": query, "boost": 2}
+            }}
+        ]
     }
 }
 es.search(index="items", body=query)
+# 优点：分词、词干、模糊、相关度排序
                     """, language="python")
         
         elif search_button and not search_query:
